@@ -167,7 +167,7 @@ export interface components {
             /** Format: date */
             issueDate?: null | string;
             lines: components["schemas"]["InvoiceLine"][];
-            notes?: unknown[];
+            notes?: (string | components["schemas"]["InvoiceNote"])[];
             paymentDetails?: null | components["schemas"]["PaymentDetails"];
             precedingInvoiceReferences?: components["schemas"]["PrecedingInvoiceReference"][];
             purchaseOrderReference?: null | string;
@@ -203,6 +203,19 @@ export interface components {
             endDate?: null | string;
             /** Format: date */
             startDate?: null | string;
+        };
+        /** @description A note with a subject code that qualifies what it is about. */
+        InvoiceNote: {
+            /** @description The note text. */
+            note: string;
+            /**
+             * @description UNTDID 4451 text subject code qualifying the note, for example PMT (recovery costs), PMD (late-payment penalties), AAB (discount terms) or TXD (tax statement).
+             * @example PMT
+             * @example PMD
+             * @example AAB
+             * @example TXD
+             */
+            subjectCode?: null | string;
         };
         InvoiceOptions: {
             brandColor?: null | string;
@@ -294,7 +307,12 @@ export interface components {
             mandateReference?: null | string;
             paymentAccountIdentifier?: null | string;
             paymentAccountName?: null | string;
-            paymentMeansCode?: unknown;
+            /**
+             * @description UNTDID 4461 payment means code, for example "30" (credit transfer) or "58" (SEPA credit transfer). Any code from the UNTDID 4461 list is accepted. The code is also accepted as a JSON number (30) or by its readable name ("CreditTransfer") and is always returned as the code string.
+             * @example 30
+             * @example 58
+             */
+            paymentMeansCode?: null | string;
             paymentMeansText?: null | string;
             paymentTerms?: null | string;
             remittanceInformation?: null | string;

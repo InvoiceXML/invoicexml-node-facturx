@@ -1,0 +1,71 @@
+{
+  "name": "@invoicexml/facturx",
+  "version": "1.0.0",
+  "description": "Create, validate, embed and extract Factur-X e-invoices (EN 16931, French e-invoicing mandate) from Node.js and TypeScript with the InvoiceXML API.",
+  "keywords": [
+    "facturx",
+    "factur-x",
+    "facture-electronique",
+    "facturation-electronique",
+    "e-invoice",
+    "einvoice",
+    "e-invoicing",
+    "einvoicing",
+    "en16931",
+    "br-fr",
+    "zugferd",
+    "pdf-a-3",
+    "cii",
+    "invoice",
+    "facture",
+    "typescript"
+  ],
+  "homepage": "https://www.invoicexml.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/InvoiceXML/invoicexml-node-facturx.git"
+  },
+  "bugs": {
+    "url": "https://github.com/InvoiceXML/invoicexml-node-facturx/issues"
+  },
+  "license": "MIT",
+  "author": "InvoiceXML <support@invoicexml.com>",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "generate": "node tools/generate-types.mjs",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "openapi-typescript": "^7.13.0",
+    "tsup": "^8.5.1",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.3"
+  }
+}

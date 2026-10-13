@@ -160,6 +160,7 @@ export interface components {
             charges?: components["schemas"]["DocumentLevelCharge"][];
             currency: null | components["schemas"]["CurrencyCode"];
             delivery?: null | components["schemas"]["DeliveryInformation"];
+            despatchAdviceReference?: null | string;
             /** Format: date */
             dueDate?: null | string;
             invoiceNumber: null | string;

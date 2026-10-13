@@ -1,6 +1,6 @@
 {
   "name": "@invoicexml/facturx",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Create, validate, embed and extract Factur-X e-invoices (EN 16931, French e-invoicing mandate) from Node.js and TypeScript with the InvoiceXML API.",
   "keywords": [
     "facturx",

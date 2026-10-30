@@ -1,5 +1,7 @@
 import { Http, type ClientOptions } from "./http.js";
 import type {
+  ConvertOptions,
+  ConvertToPdfOptions,
   EmailMessage,
   EmailSendResult,
   EmbedOptions,
@@ -7,7 +9,11 @@ import type {
   FacturXOptions,
   FileInput,
   InvoiceDocument,
+  RenderOptions,
+  TransformOptions,
   ValidateOptions,
+  ValidationReport,
+  ValidationReportOptions,
   ValidationResult,
 } from "./types.js";
 import { VERSION } from "./version.js";
@@ -46,6 +52,15 @@ export class FacturXClient {
   }
 
   /**
+   * Validates a Factur-X PDF like `validateFacturX` and returns a printable PDF report
+   * with the verdict in `valid`. An invalid invoice is a normal result, not an error.
+   */
+  async validateFacturXReport(pdf: FileInput, options: ValidationReportOptions = {}): Promise<ValidationReport> {
+    const fields = { rules: options.rules, validationLanguage: options.validationLanguage };
+    return report(await this.http.postFiles("/v1/validate/facturx/report", { file: pdf }, fields));
+  }
+
+  /**
    * Embeds an existing CII XML into an existing PDF and returns a Factur-X PDF/A-3.
    * The XML is validated before embedding unless `skipValidation` is true.
    */
@@ -79,6 +94,54 @@ export class FacturXClient {
     return json(await this.http.postFiles("/v1/embed/facturx/email", { pdf, xml }, fields));
   }
 
+  /** Renders a CII XML, such as the XML of a Factur-X invoice, as a human-readable PDF. */
+  async renderCiiToPdf(xml: FileInput, options: RenderOptions = {}): Promise<Uint8Array> {
+    const fields = { language: options.language, logoUrl: options.logoUrl, includeQrCode: options.includeQrCode };
+    return bytes(await this.http.postFiles("/v1/render/cii/to/pdf", { file: xml }, fields));
+  }
+
+  /** Converts a Factur-X PDF into UBL XML. */
+  async convertFacturXToUbl(pdf: FileInput, options: ConvertOptions = {}): Promise<string> {
+    return this.convertToXml("/v1/convert/facturx/to/ubl", pdf, options);
+  }
+
+  /** Converts a Factur-X PDF into CII XML. */
+  async convertFacturXToCii(pdf: FileInput, options: ConvertOptions = {}): Promise<string> {
+    return this.convertToXml("/v1/convert/facturx/to/cii", pdf, options);
+  }
+
+  /** Converts a CII XML into a Factur-X PDF/A-3 with a PDF rendered from the invoice. */
+  async convertCiiToFacturX(xml: FileInput, options: ConvertToPdfOptions = {}): Promise<Uint8Array> {
+    return this.convertToPdf("/v1/convert/cii/to/facturx", xml, options);
+  }
+
+  /** Converts a UBL XML into a Factur-X PDF/A-3 with a PDF rendered from the invoice. */
+  async convertUblToFacturX(xml: FileInput, options: ConvertToPdfOptions = {}): Promise<Uint8Array> {
+    return this.convertToPdf("/v1/convert/ubl/to/facturx", xml, options);
+  }
+
+  /** Converts an XRechnung XML (UBL or CII) into a Factur-X PDF/A-3 with a PDF rendered from the invoice. */
+  async convertXRechnungToFacturX(xml: FileInput, options: ConvertToPdfOptions = {}): Promise<Uint8Array> {
+    return this.convertToPdf("/v1/convert/xrechnung/to/facturx", xml, options);
+  }
+
+  /**
+   * Reads a PDF invoice and returns a Factur-X PDF/A-3. AI reads the PDF, so a person
+   * must check the result before it is used. Throws an `InvoiceXmlError` with the
+   * violated rules in `errors` when the data read would not be compliant. A 429 on this
+   * method is not retried automatically, so wait for `Retry-After` before calling again
+   * if you want to retry.
+   */
+  async transformToFacturX(pdf: FileInput, options: TransformOptions = {}): Promise<Uint8Array> {
+    const fields = {
+      language: options.language,
+      preserveOriginalPdf: options.preserveOriginalPdf,
+      includeAdvancedProperties: options.includeAdvancedProperties,
+      validationLanguage: options.validationLanguage,
+    };
+    return bytes(await this.http.postFiles("/v1/transform/to/facturx", { file: pdf }, fields, { retryRateLimit: false }));
+  }
+
   /**
    * Reads a Factur-X PDF or a CII XML into invoice data. Deterministic: the XML
    * is parsed, no AI is involved.
@@ -90,6 +153,16 @@ export class FacturXClient {
   /** Extracts the supporting documents attached to an invoice as a ZIP archive. */
   async extractAttachments(file: FileInput): Promise<Uint8Array> {
     return bytes(await this.http.postFiles("/v1/extract/attachments", { file }));
+  }
+
+  private async convertToXml(path: string, file: FileInput, options: ConvertOptions): Promise<string> {
+    const fields = { validationLanguage: options.validationLanguage };
+    return (await this.http.postFiles(path, { file }, fields)).text();
+  }
+
+  private async convertToPdf(path: string, file: FileInput, options: ConvertToPdfOptions): Promise<Uint8Array> {
+    const fields = { language: options.language, validationLanguage: options.validationLanguage };
+    return bytes(await this.http.postFiles(path, { file }, fields));
   }
 }
 
@@ -137,4 +210,9 @@ async function bytes(response: Response): Promise<Uint8Array> {
 
 async function json<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
+}
+
+async function report(response: Response): Promise<ValidationReport> {
+  const verdict = response.headers.get("X-Invoice-Valid");
+  return { file: await bytes(response), valid: verdict === "true" ? true : verdict === "false" ? false : null };
 }

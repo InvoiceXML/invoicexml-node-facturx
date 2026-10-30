@@ -6,7 +6,7 @@ export interface ClientOptions {
   apiKey: string;
   /** Defaults to https://api.invoicexml.com. */
   baseUrl?: string;
-  /** How often a 429 is retried after waiting Retry-After seconds. Defaults to 3. 0 disables retries. */
+  /** How often a 429 is retried after waiting Retry-After seconds, on every call except transform. Defaults to 3. 0 disables retries. */
   maxRetries?: number;
   /** Request timeout in milliseconds. Defaults to 120000. */
   timeoutMs?: number;
@@ -47,6 +47,7 @@ export class Http {
     path: string,
     files: Record<string, FileInput>,
     fields: Record<string, string | boolean | readonly string[] | null | undefined> = {},
+    { retryRateLimit = true }: { retryRateLimit?: boolean } = {},
   ): Promise<Response> {
     const form = new FormData();
     for (const [name, input] of Object.entries(files)) {
@@ -57,10 +58,10 @@ export class Http {
       if (Array.isArray(value)) for (const item of value) form.append(name, item);
       else if (value !== undefined && value !== null) form.append(name, String(value));
     }
-    return this.send(path, form);
+    return this.send(path, form, undefined, retryRateLimit);
   }
 
-  private async send(path: string, body: string | FormData, contentType?: string): Promise<Response> {
+  private async send(path: string, body: string | FormData, contentType?: string, retryRateLimit = true): Promise<Response> {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
       Accept: "*/*",
@@ -76,7 +77,7 @@ export class Http {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
 
-      if (response.status === 429 && attempt < this.maxRetries) {
+      if (response.status === 429 && retryRateLimit && attempt < this.maxRetries) {
         await response.body?.cancel();
         await new Promise((resolve) => setTimeout(resolve, retryAfter(response) * 1000));
         continue;

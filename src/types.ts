@@ -45,6 +45,62 @@ export interface EmbedOptions {
   rules?: RuleSet[];
 }
 
+/** Options for `renderCiiToPdf`. */
+export interface RenderOptions {
+  /** Language of the labels: "EN" (default), "DE" or "FR". */
+  language?: Language;
+  /** Public PNG or JPEG URL of a logo printed on the PDF. */
+  logoUrl?: string;
+  /** Prints the payment QR code (GiroCode) on the PDF. Defaults to false. */
+  includeQrCode?: boolean;
+}
+
+/** Options for the convert methods that return XML. */
+export interface ConvertOptions {
+  /** Language of the findings when a conversion fails: "EN" (default), "DE" or "FR". */
+  validationLanguage?: Language;
+}
+
+/** Options for the convert methods that return a Factur-X PDF. */
+export interface ConvertToPdfOptions extends ConvertOptions {
+  /** Language of the rendered PDF and of default texts the XML lacks: "EN" (default), "DE" or "FR". */
+  language?: Language;
+}
+
+/** Options for `validateFacturXReport`. */
+export interface ValidationReportOptions extends ValidateOptions {
+  /** Language of the whole report: "EN" (default), "DE" or "FR". */
+  validationLanguage?: Language;
+}
+
+/** Result of a validation report call. An invalid invoice is a normal result, so check `valid`. */
+export interface ValidationReport {
+  /** The printable PDF report. */
+  file: Uint8Array;
+  /** The verdict from the `X-Invoice-Valid` response header, or null when the header is missing. */
+  valid: boolean | null;
+}
+
+/** Options for `transformToFacturX`. All optional. */
+export interface TransformOptions {
+  /**
+   * Language of the rendered PDF and of default texts: "EN", "DE", "FR", or "auto"
+   * (default) for the language the invoice is written in, English when that is none
+   * of the three.
+   */
+  language?: Language | "auto";
+  /** Keeps the uploaded PDF as the visual layer and only embeds the XML. Defaults to false. */
+  preserveOriginalPdf?: boolean;
+  /**
+   * Ends the rendered PDF with an "Electronic invoice details" section listing the
+   * technical fields. Defaults to true, set false for the classic layout. Ignored with
+   * `preserveOriginalPdf`.
+   */
+  includeAdvancedProperties?: boolean;
+  /** Language of the findings when the invoice is refused: "EN" (default), "DE" or "FR". */
+  validationLanguage?: Language;
+}
+
 /**
  * The email that carries the invoice. `from` and `to` are required. The sender
  * must be on a domain added and verified on the Verified email domains page of

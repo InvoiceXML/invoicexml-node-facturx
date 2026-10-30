@@ -46,9 +46,17 @@ You send net prices, quantities and VAT rates. The API computes the totals and t
 | --- | --- | --- |
 | `createFacturX(invoice, options?)` | `POST /v1/create/facturx` | Factur-X PDF/A-3 as `Uint8Array` |
 | `validateFacturX(pdf, { rules? })` | `POST /v1/validate/facturx` | `ValidationResult` |
+| `validateFacturXReport(pdf, { rules?, validationLanguage? })` | `POST /v1/validate/facturx/report` | `ValidationReport`: the PDF report in `file`, the verdict in `valid` |
 | `embedFacturX(pdf, xml, { skipValidation?, rules? })` | `POST /v1/embed/facturx` | Factur-X PDF/A-3 as `Uint8Array` |
 | `emailFacturX(invoice, email, options?)` | `POST /v1/create/facturx/email` | `EmailSendResult` |
 | `emailEmbeddedFacturX(pdf, xml, email, { rules? })` | `POST /v1/embed/facturx/email` | `EmailSendResult` |
+| `renderCiiToPdf(xml, { language?, logoUrl?, includeQrCode? })` | `POST /v1/render/cii/to/pdf` | Readable PDF as `Uint8Array` |
+| `convertFacturXToUbl(pdf, { validationLanguage? })` | `POST /v1/convert/facturx/to/ubl` | UBL XML as `string` |
+| `convertFacturXToCii(pdf, { validationLanguage? })` | `POST /v1/convert/facturx/to/cii` | CII XML as `string` |
+| `convertCiiToFacturX(xml, { language?, validationLanguage? })` | `POST /v1/convert/cii/to/facturx` | Factur-X PDF/A-3 as `Uint8Array` |
+| `convertUblToFacturX(xml, { language?, validationLanguage? })` | `POST /v1/convert/ubl/to/facturx` | Factur-X PDF/A-3 as `Uint8Array` |
+| `convertXRechnungToFacturX(xml, { language?, validationLanguage? })` | `POST /v1/convert/xrechnung/to/facturx` | Factur-X PDF/A-3 as `Uint8Array` |
+| `transformToFacturX(pdf, options?)` | `POST /v1/transform/to/facturx` | Factur-X PDF/A-3 as `Uint8Array`, to be checked by a person |
 | `extractJson(file)` | `POST /v1/extract/json` | `{ invoice }`, ready to pass back to `createFacturX` |
 | `extractAttachments(file)` | `POST /v1/extract/attachments` | Supporting documents as a ZIP `Uint8Array` |
 
@@ -62,7 +70,7 @@ The `InvoiceDocument` type is generated from the [OpenAPI schema](https://api.in
 
 ### The French e-invoicing mandate
 
-Add the `br-fr` rule set to check an invoice against the mandate's BR-FR rules on top of its profile. It works on create, validate and embed, and needs at least the BASIC profile. The BR-FR rules ask for the billing mode in `businessProcessType` (`B1` for goods, `S1` for services, `M1` for mixed), the SIREN of both parties, and the legal mentions as notes with the subject codes `PMT`, `PMD` and `AAB`:
+Add the `br-fr` rule set to check an invoice against the mandate's BR-FR rules on top of its profile. It works on create, validate, the validation report and embed, and needs at least the BASIC profile. The BR-FR rules ask for the billing mode in `businessProcessType` (`B1` for goods, `S1` for services, `M1` for mixed), the SIREN of both parties, and the legal mentions as notes with the subject codes `PMT`, `PMD` and `AAB`:
 
 ```ts
 const pdf = await client.createFacturX({
@@ -117,7 +125,7 @@ No file comes back: you get `{ status: "accepted", messageId }`. `accepted` mean
 
 Refused requests throw an `InvoiceXmlError` and send nothing. `errorCode` 4020 means your plan does not include email delivery ([pricing](https://www.invoicexml.com/pricing)), 4021 that email sending is disabled or paused for your account, and 4022 that the sender's domain is not verified yet. These three are not billed. Error 4002 lists a bad address, a sender domain that is not on your account or too many copies in `errors`.
 
-The client retries a 429 only, which sent nothing. A timeout, a network failure or a 503 with `errorCode` 4023, which can happen while the send is in flight, is never retried, because the email may already be on its way, so check before you send it again.
+The client retries a 429 only, which sent nothing. A timeout or a network failure is never retried, because the email may already be on its way, so check before you send it again.
 
 ### Validation
 
@@ -129,6 +137,46 @@ if (!result.valid) {
   for (const f of result.errors) console.log(`[${f.rule}] (${f.layer}) ${f.message}`);
 }
 ```
+
+### Validation report
+
+`validateFacturXReport` runs the same validation, plus any extra `rules`, and returns a printable PDF report. The verdict is in `valid`, which is `null` if the response carries none. An invalid invoice resolves normally, while a missing or malformed file throws an `InvoiceXmlError`. `validationLanguage` (`"EN"`, `"DE"` or `"FR"`) sets the language of the whole report. See the [reference](https://www.invoicexml.com/docs/api/validate/facturx/report).
+
+```ts
+const { file, valid } = await client.validateFacturXReport(await readFile("facture-fournisseur.pdf"), {
+  rules: ["br-fr"],
+  validationLanguage: "FR",
+});
+await writeFile("rapport.pdf", file);
+if (valid === false) console.log("The invoice is not compliant, see the report.");
+```
+
+### Render
+
+`renderCiiToPdf` turns a CII XML, such as the XML of a Factur-X invoice, into a readable PDF. It accepts `language` (`"EN"`, `"DE"` or `"FR"`), `logoUrl` and `includeQrCode`, which prints the payment QR code. See the [reference](https://www.invoicexml.com/docs/api/render/cii/to/pdf).
+
+```ts
+const pdf = await client.renderCiiToPdf(await readFile("facture.xml"), { language: "FR" });
+```
+
+### Convert
+
+Each convert method covers one route between two formats. No AI is involved, and the result is validated before it is returned: a failed conversion throws an `InvoiceXmlError` with the violated rules in `errors`, worded in `validationLanguage` (`"EN"`, `"DE"` or `"FR"`), which every convert method accepts.
+
+- From Factur-X: `convertFacturXToUbl` and `convertFacturXToCii` read the XML embedded in the PDF.
+- To Factur-X: `convertCiiToFacturX`, `convertUblToFacturX` and `convertXRechnungToFacturX` return a PDF/A-3 with a PDF rendered from the invoice. They also accept `language` for that PDF.
+
+```ts
+const pdf = await client.convertUblToFacturX(await readFile("facture.xml"), { language: "FR" });
+```
+
+Every route has a reference page, for example [Factur-X to UBL](https://www.invoicexml.com/docs/api/convert/facturx/to/ubl) and [UBL to Factur-X](https://www.invoicexml.com/docs/api/convert/ubl/to/facturx).
+
+### Transform
+
+`transformToFacturX(pdf, options?)` builds a Factur-X invoice from a plain PDF. AI reads the PDF, so a person must check the result before it is used.
+
+It accepts `language` (`"EN"`, `"DE"`, `"FR"` or `"auto"`, the default), `preserveOriginalPdf`, `includeAdvancedProperties` (on by default, so the data read can be checked on the pages) and `validationLanguage`. A 429 on this method is not retried automatically, so wait for `Retry-After` before calling again if you want to retry. See the [reference](https://www.invoicexml.com/docs/api/transform/to/facturx).
 
 ### Errors and rate limits
 
@@ -146,7 +194,7 @@ try {
 }
 ```
 
-On HTTP 429 the client waits for the `Retry-After` delay and retries, up to `maxRetries` times (default 3). After that it throws a `TooManyRequestsError` with `retryAfter` in seconds. A request answered with 429 was not processed and not billed.
+On HTTP 429 every call except transform waits for the `Retry-After` delay and retries, up to `maxRetries` times (default 3). After that it throws a `TooManyRequestsError` with `retryAfter` in seconds. A 429 is not billed.
 
 ### Client options
 

@@ -59,6 +59,11 @@ const jsonResponse = (body: unknown, status = 200, headers: Record<string, strin
 
 const headers = (call: Call) => call.init.headers as Record<string, string>;
 const form = (call: Call) => call.init.body as FormData;
+const fieldNames = (call: Call) => {
+  const names: string[] = [];
+  form(call).forEach((_, name) => names.push(name));
+  return names;
+};
 
 const verdict = {
   valid: true,
@@ -190,6 +195,170 @@ describe("uploads", () => {
     ]);
   });
 });
+
+describe("render", () => {
+  it("sends every option to /v1/render/cii/to/pdf", async () => {
+    const { fetch, calls } = mockFetch(new Response(PDF));
+    const pdf = await client(fetch).renderCiiToPdf(XML, { language: "FR", logoUrl: "https://example.com/logo.png", includeQrCode: true });
+
+    expect(Array.from(pdf)).toEqual(Array.from(PDF));
+    expect(calls[0]!.url).toBe("https://api.invoicexml.com/v1/render/cii/to/pdf");
+    const body = form(calls[0]!);
+    expect((body.get("file") as File).type).toBe("application/xml");
+    expect(body.get("language")).toBe("FR");
+    expect(body.get("logoUrl")).toBe("https://example.com/logo.png");
+    expect(body.get("includeQrCode")).toBe("true");
+  });
+
+  it("omits unset options and sends an explicit includeQrCode false", async () => {
+    const { fetch, calls } = mockFetch(new Response(PDF), new Response(PDF));
+    await client(fetch).renderCiiToPdf(XML);
+    await client(fetch).renderCiiToPdf(XML, { includeQrCode: false });
+
+    expect(fieldNames(calls[0]!)).toEqual(["file"]);
+    expect(form(calls[1]!).get("includeQrCode")).toBe("false");
+  });
+});
+
+describe("convert", () => {
+  it.each([
+    ["convertFacturXToUbl", "facturx/to/ubl"],
+    ["convertFacturXToCii", "facturx/to/cii"],
+  ] as const)("%s posts to /v1/convert/%s and returns the XML as text", async (method, route) => {
+    const { fetch, calls } = mockFetch(new Response(XML), new Response(XML));
+    const xml = await client(fetch)[method](PDF, { validationLanguage: "FR" });
+    await client(fetch)[method](PDF);
+
+    expect(xml).toBe(XML);
+    expect(calls[0]!.url).toBe(`https://api.invoicexml.com/v1/convert/${route}`);
+    expect(fieldNames(calls[0]!)).toEqual(["file", "validationLanguage"]);
+    expect(form(calls[0]!).get("validationLanguage")).toBe("FR");
+    expect(fieldNames(calls[1]!)).toEqual(["file"]);
+  });
+
+  it.each([
+    ["convertCiiToFacturX", "cii/to/facturx"],
+    ["convertUblToFacturX", "ubl/to/facturx"],
+    ["convertXRechnungToFacturX", "xrechnung/to/facturx"],
+  ] as const)("%s posts to /v1/convert/%s and returns the PDF bytes", async (method, route) => {
+    const { fetch, calls } = mockFetch(new Response(PDF), new Response(PDF));
+    const pdf = await client(fetch)[method](XML, { language: "FR", validationLanguage: "DE" });
+    await client(fetch)[method](XML);
+
+    expect(Array.from(pdf)).toEqual(Array.from(PDF));
+    expect(calls[0]!.url).toBe(`https://api.invoicexml.com/v1/convert/${route}`);
+    expect(form(calls[0]!).get("language")).toBe("FR");
+    expect(form(calls[0]!).get("validationLanguage")).toBe("DE");
+    expect(fieldNames(calls[1]!)).toEqual(["file"]);
+  });
+
+  it("surfaces a failed conversion through InvoiceXmlError", async () => {
+    const problem = { title: "No embedded XML", status: 400, errorCode: 4006, errors: [], warnings: [] };
+    const { fetch } = mockFetch(jsonResponse(problem, 400));
+    const error = await client(fetch).convertFacturXToUbl(PDF).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(InvoiceXmlError);
+    expect((error as InvoiceXmlError).errorCode).toBe(4006);
+  });
+});
+
+describe("validation report", () => {
+  const reportResponse = (headers?: Record<string, string>) => new Response(PDF, { headers });
+
+  it("posts to /v1/validate/facturx/report and returns the file and verdict", async () => {
+    const { fetch, calls } = mockFetch(reportResponse({ "X-Invoice-Valid": "true" }));
+    const report = await client(fetch).validateFacturXReport(PDF, { validationLanguage: "FR" });
+
+    expect(report.valid).toBe(true);
+    expect(Array.from(report.file)).toEqual(Array.from(PDF));
+    expect(calls[0]!.url).toBe("https://api.invoicexml.com/v1/validate/facturx/report");
+    expect((form(calls[0]!).get("file") as File).type).toBe("application/pdf");
+    expect(form(calls[0]!).get("validationLanguage")).toBe("FR");
+  });
+
+  it("sends one rules part per rule set", async () => {
+    const { fetch, calls } = mockFetch(reportResponse({ "X-Invoice-Valid": "true" }));
+    await client(fetch).validateFacturXReport(PDF, { rules: ["br-fr", "br-fr"] });
+    expect(form(calls[0]!).getAll("rules")).toEqual(["br-fr", "br-fr"]);
+  });
+
+  it("returns a failed verdict as a normal result", async () => {
+    const { fetch } = mockFetch(reportResponse({ "X-Invoice-Valid": "false" }));
+    const report = await client(fetch).validateFacturXReport(PDF, { rules: ["br-fr"] });
+    expect(report.valid).toBe(false);
+    expect(report.file.byteLength).toBe(PDF.byteLength);
+  });
+
+  it("returns null when the verdict header is missing and omits unset options", async () => {
+    const { fetch, calls } = mockFetch(reportResponse());
+    const report = await client(fetch).validateFacturXReport(PDF);
+    expect(report.valid).toBeNull();
+    expect(fieldNames(calls[0]!)).toEqual(["file"]);
+  });
+
+  it("surfaces a malformed file through InvoiceXmlError", async () => {
+    const problem = { title: "Invalid file", status: 400, errorCode: 4003, errors: [], warnings: [] };
+    const { fetch } = mockFetch(jsonResponse(problem, 400));
+    const error = await client(fetch).validateFacturXReport(XML).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(InvoiceXmlError);
+    expect((error as InvoiceXmlError).status).toBe(400);
+  });
+});
+
+describe("transform", () => {
+  it("sends every option and returns the PDF bytes", async () => {
+    const { fetch, calls } = mockFetch(new Response(PDF));
+    const pdf = await client(fetch).transformToFacturX(PDF, {
+      language: "auto",
+      preserveOriginalPdf: true,
+      includeAdvancedProperties: true,
+      validationLanguage: "FR",
+    });
+
+    expect(Array.from(pdf)).toEqual(Array.from(PDF));
+    expect(calls[0]!.url).toBe("https://api.invoicexml.com/v1/transform/to/facturx");
+    const body = form(calls[0]!);
+    expect((body.get("file") as File).type).toBe("application/pdf");
+    expect(body.get("language")).toBe("auto");
+    expect(body.get("preserveOriginalPdf")).toBe("true");
+    expect(body.get("includeAdvancedProperties")).toBe("true");
+    expect(body.get("validationLanguage")).toBe("FR");
+  });
+
+  it("omits unset options, so the API defaults apply", async () => {
+    const { fetch, calls } = mockFetch(new Response(PDF));
+    await client(fetch).transformToFacturX(PDF);
+    expect(fieldNames(calls[0]!)).toEqual(["file"]);
+  });
+
+  it("really sends includeAdvancedProperties false", async () => {
+    const { fetch, calls } = mockFetch(new Response(PDF));
+    await client(fetch).transformToFacturX(PDF, { includeAdvancedProperties: false });
+    expect(form(calls[0]!).get("includeAdvancedProperties")).toBe("false");
+  });
+
+  it("surfaces a refused invoice through InvoiceXmlError", async () => {
+    const problem = { title: "Invoice validation failed", status: 400, errorCode: 4001, errors: [{ rule: "BR-16", message: "x" }], warnings: [] };
+    const { fetch } = mockFetch(jsonResponse(problem, 400));
+    const error = await client(fetch).transformToFacturX(PDF).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(InvoiceXmlError);
+    expect((error as InvoiceXmlError).errors[0]!.rule).toBe("BR-16");
+  });
+
+  it("makes one request on a 429 and throws TooManyRequestsError", async () => {
+    const { fetch, calls } = mockFetch(jsonResponse({ title: "Too Many Requests" }, 429, { "Retry-After": "7" }));
+    const error = await client(fetch).transformToFacturX(PDF).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(TooManyRequestsError);
+    expect((error as TooManyRequestsError).status).toBe(429);
+    expect((error as TooManyRequestsError).retryAfter).toBe(7);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe("https://api.invoicexml.com/v1/transform/to/facturx");
+  });
+});
+
 
 describe("email", () => {
   const accepted = { status: "accepted", messageId: "msg-1" };
@@ -362,6 +531,25 @@ describe("rate limiting", () => {
     await vi.advanceTimersByTimeAsync(1);
     await expect(pending).resolves.toBeInstanceOf(Uint8Array);
     expect(calls).toHaveLength(2);
+  });
+
+  it("retries a 429 on render, convert and report calls", async () => {
+    const limited = () => jsonResponse({}, 429, { "Retry-After": "0" });
+    const { fetch, calls } = mockFetch(limited(), new Response(PDF), limited(), new Response(XML), limited(), new Response(PDF));
+    const sdk = client(fetch);
+
+    await sdk.renderCiiToPdf(XML);
+    await sdk.convertFacturXToUbl(PDF);
+    await sdk.validateFacturXReport(PDF);
+
+    expect(calls.map((call) => new URL(call.url).pathname)).toEqual([
+      "/v1/render/cii/to/pdf",
+      "/v1/render/cii/to/pdf",
+      "/v1/convert/facturx/to/ubl",
+      "/v1/convert/facturx/to/ubl",
+      "/v1/validate/facturx/report",
+      "/v1/validate/facturx/report",
+    ]);
   });
 
   it("throws TooManyRequestsError once retries are used up", async () => {

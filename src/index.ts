@@ -3,6 +3,8 @@ export type { ClientOptions } from "./http.js";
 export { InvoiceXmlError, TooManyRequestsError } from "./errors.js";
 export { FacturXProfiles, type FacturXProfile } from "./profiles.js";
 export type {
+  EmailMessage,
+  EmailSendResult,
   EmbedOptions,
   ExtractJsonResult,
   FacturXOptions,

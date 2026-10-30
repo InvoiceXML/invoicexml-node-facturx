@@ -36,7 +36,7 @@ You send net prices, quantities and VAT rates. The API computes the totals and t
 
 - **Rule sets updated on their legal effective dates.** New EN 16931, Factur-X and BR-FR releases go live server-side on the day they take effect. No package update, no redeploy.
 - **Validated before delivery.** Every document you create passes the XSD and Schematron rules before it leaves the API. A non-compliant invoice is refused with the violated rules, so it never reaches your customer.
-- **Zero data retention.** Invoices are processed in memory and returned in the same response. Nothing is stored and nothing is used for AI training.
+- **Zero data retention.** Invoices are processed in memory and returned in the same response. Nothing is stored and nothing is used for AI training. When you email an invoice, it goes to our email service for delivery, and we keep no copy.
 - **Processing in Frankfurt.** EU-only processing in Frankfurt, Germany, GDPR compliant by design.
 - **Integration assistance.** If a rule finding needs a human explanation, write to [support@invoicexml.com](mailto:support@invoicexml.com) and a person who knows the rule sets answers.
 
@@ -47,6 +47,8 @@ You send net prices, quantities and VAT rates. The API computes the totals and t
 | `createFacturX(invoice, options?)` | `POST /v1/create/facturx` | Factur-X PDF/A-3 as `Uint8Array` |
 | `validateFacturX(pdf, { rules? })` | `POST /v1/validate/facturx` | `ValidationResult` |
 | `embedFacturX(pdf, xml, { skipValidation?, rules? })` | `POST /v1/embed/facturx` | Factur-X PDF/A-3 as `Uint8Array` |
+| `emailFacturX(invoice, email, options?)` | `POST /v1/create/facturx/email` | `EmailSendResult` |
+| `emailEmbeddedFacturX(pdf, xml, email, { rules? })` | `POST /v1/embed/facturx/email` | `EmailSendResult` |
 | `extractJson(file)` | `POST /v1/extract/json` | `{ invoice }`, ready to pass back to `createFacturX` |
 | `extractAttachments(file)` | `POST /v1/extract/attachments` | Supporting documents as a ZIP `Uint8Array` |
 
@@ -91,6 +93,31 @@ const basic = await client.createFacturX({ ...invoice, specificationId: FacturXP
 ```
 
 `MINIMUM` and `BASIC_WL` carry header data only and serve as booking aids. `BASIC` is the lowest profile the French mandate accepts, and `EXTENDED` adds data for complex invoicing.
+
+### Send an invoice by email
+
+Create or embed an invoice and email it to your customer in one call. It is built and validated exactly as on the plain method, and only an invoice that passes is sent, as a real email from your own address. The sender must be on a domain added and verified on the Verified email domains page of your dashboard. See the [email guide](https://www.invoicexml.com/docs/api/create/facturx/email).
+
+```ts
+const { messageId } = await client.emailFacturX(invoice, {
+  from: "factures@atelier-numerique.fr",
+  fromName: "Atelier Numerique",
+  to: "compta@grand-siecle.fr",
+  cc: ["archives@atelier-numerique.fr"],
+  subject: "Facture FA-2026-0042",
+  message: "Bonjour,\n\nVeuillez trouver notre facture ci-jointe.",
+}, { language: "FR" });
+```
+
+`emailEmbeddedFacturX(pdf, xml, email, { rules? })` packages your own PDF and CII XML first; it always validates, so it has no `skipValidation`.
+
+Only `from` and `to` are required. Left out, the subject is the document type and its number, and the message is a short English text. `cc` and `bcc` hold at most 2 addresses together.
+
+No file comes back: you get `{ status: "accepted", messageId }`. `accepted` means the email was handed over for delivery, not that the recipient's server has received it yet. Keep the `messageId` to ask about a delivery later. No copy of the invoice or of your subject and message is kept.
+
+Refused requests throw an `InvoiceXmlError` and send nothing. `errorCode` 4020 means your plan does not include email delivery ([pricing](https://www.invoicexml.com/pricing)), 4021 that email sending is disabled or paused for your account, and 4022 that the sender's domain is not verified yet. These three are not billed. Error 4002 lists a bad address, a sender domain that is not on your account or too many copies in `errors`.
+
+The client retries a 429 only, which sent nothing. A timeout, a network failure or a 503 with `errorCode` 4023, which can happen while the send is in flight, is never retried, because the email may already be on its way, so check before you send it again.
 
 ### Validation
 

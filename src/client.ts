@@ -1,5 +1,7 @@
 import { Http, type ClientOptions } from "./http.js";
 import type {
+  EmailMessage,
+  EmailSendResult,
   EmbedOptions,
   ExtractJsonResult,
   FacturXOptions,
@@ -53,6 +55,31 @@ export class FacturXClient {
   }
 
   /**
+   * Creates a Factur-X invoice like `createFacturX` and sends it as a real email
+   * from your own verified domain. Returns the message id, not the file. A
+   * non-compliant invoice throws an `InvoiceXmlError` and is not sent.
+   */
+  async emailFacturX(invoice: InvoiceDocument, email: EmailMessage, options?: FacturXOptions): Promise<EmailSendResult> {
+    return json(await this.http.postJson("/v1/create/facturx/email", invoice, options, normalizeEmail(email)));
+  }
+
+  /**
+   * Embeds an existing CII XML into an existing PDF like `embedFacturX` and sends
+   * the Factur-X PDF/A-3 as a real email from your own verified domain. Returns the
+   * message id, not the file. The XML is always validated before sending, plus any
+   * extra `rules`.
+   */
+  async emailEmbeddedFacturX(
+    pdf: FileInput,
+    xml: FileInput,
+    email: EmailMessage,
+    options: Pick<EmbedOptions, "rules"> = {},
+  ): Promise<EmailSendResult> {
+    const fields = { ...emailFields(email), rules: options.rules };
+    return json(await this.http.postFiles("/v1/embed/facturx/email", { pdf, xml }, fields));
+  }
+
+  /**
    * Reads a Factur-X PDF or a CII XML into invoice data. Deterministic: the XML
    * is parsed, no AI is involved.
    */
@@ -64,6 +91,44 @@ export class FacturXClient {
   async extractAttachments(file: FileInput): Promise<Uint8Array> {
     return bytes(await this.http.postFiles("/v1/extract/attachments", { file }));
   }
+}
+
+const SINGLE_VALUE_EMAIL_FIELDS = ["from", "fromName", "to", "replyTo", "subject", "message"] as const;
+
+/**
+ * The same rules for the JSON and the form routes, also for JavaScript callers: a
+ * list is refused in a single-value field, because a form route would lose all but
+ * its first item. `cc` and `bcc` take one address or a list, without blank entries.
+ */
+function normalizeEmail(email: EmailMessage): EmailMessage {
+  for (const field of SINGLE_VALUE_EMAIL_FIELDS) {
+    if (Array.isArray(email[field])) {
+      throw new TypeError(`email.${field} takes a single value. Only cc and bcc take a list.`);
+    }
+  }
+  const { cc, bcc, ...normalized } = email;
+  return { ...normalized, cc: copyAddresses(cc), bcc: copyAddresses(bcc) };
+}
+
+function copyAddresses(addresses: string | string[] | null | undefined): string[] | undefined {
+  const kept = [addresses]
+    .flat()
+    .flatMap((address) => (typeof address === "string" && address.trim() ? [address.trim()] : []));
+  return kept.length > 0 ? kept : undefined;
+}
+
+function emailFields(email: EmailMessage) {
+  const normalized = normalizeEmail(email);
+  return {
+    "email.from": normalized.from,
+    "email.fromName": normalized.fromName,
+    "email.to": normalized.to,
+    "email.cc": normalized.cc,
+    "email.bcc": normalized.bcc,
+    "email.replyTo": normalized.replyTo,
+    "email.subject": normalized.subject,
+    "email.message": normalized.message,
+  };
 }
 
 async function bytes(response: Response): Promise<Uint8Array> {

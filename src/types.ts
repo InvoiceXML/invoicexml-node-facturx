@@ -45,6 +45,38 @@ export interface EmbedOptions {
   rules?: RuleSet[];
 }
 
+/**
+ * The email that carries the invoice. `from` and `to` are required. The sender
+ * must be on a domain added and verified on the Verified email domains page of
+ * the dashboard.
+ */
+export interface EmailMessage {
+  /** Sender address on one of your verified domains, for example "factures@example.com". */
+  from: string;
+  /** The recipient's address. One address. */
+  to: string;
+  /** Display name of the sender. */
+  fromName?: string;
+  /** Addresses that receive a visible copy. `cc` and `bcc` hold at most 2 addresses together. */
+  cc?: string[];
+  /** Addresses that receive a hidden copy. `cc` and `bcc` hold at most 2 addresses together. */
+  bcc?: string[];
+  /** Address the recipient's replies go to, when it differs from the sender. */
+  replyTo?: string;
+  /** Subject. Left out, the document type and its number are used. */
+  subject?: string;
+  /** Plain-text message, sent exactly as given. Left out, a short English text is sent. */
+  message?: string;
+}
+
+/** Response of the email methods. No file comes back. */
+export interface EmailSendResult {
+  /** Always "accepted": handed over for delivery, not yet received by the recipient's server. */
+  status: string;
+  /** Identifier of the sent email. Keep it to ask about a delivery later. */
+  messageId: string;
+}
+
 /** Response of `extractJson`. `invoice` can be passed straight back to `createFacturX`. */
 export interface ExtractJsonResult {
   invoice: InvoiceDocument;

@@ -36,16 +36,17 @@ export class Http {
     this.fetchFn = options.fetch ?? globalThis.fetch;
   }
 
-  postJson(path: string, invoice: unknown, options?: object): Promise<Response> {
+  postJson(path: string, invoice: unknown, options?: object, email?: object): Promise<Response> {
     const body: Record<string, unknown> = { invoice };
     if (options && Object.keys(options).length > 0) body.options = options;
+    if (email) body.email = email;
     return this.send(path, JSON.stringify(body), "application/json");
   }
 
   async postFiles(
     path: string,
     files: Record<string, FileInput>,
-    fields: Record<string, string | boolean | readonly string[] | undefined> = {},
+    fields: Record<string, string | boolean | readonly string[] | null | undefined> = {},
   ): Promise<Response> {
     const form = new FormData();
     for (const [name, input] of Object.entries(files)) {
@@ -54,7 +55,7 @@ export class Http {
     }
     for (const [name, value] of Object.entries(fields)) {
       if (Array.isArray(value)) for (const item of value) form.append(name, item);
-      else if (value !== undefined) form.append(name, String(value));
+      else if (value !== undefined && value !== null) form.append(name, String(value));
     }
     return this.send(path, form);
   }

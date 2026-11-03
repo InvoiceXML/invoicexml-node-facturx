@@ -1,5 +1,6 @@
 import { Http, type ClientOptions } from "./http.js";
 import type {
+  CiiOptions,
   ConvertOptions,
   ConvertToPdfOptions,
   EmailMessage,
@@ -11,6 +12,7 @@ import type {
   InvoiceDocument,
   RenderOptions,
   TransformOptions,
+  UblOptions,
   ValidateOptions,
   ValidationReport,
   ValidationReportOptions,
@@ -41,6 +43,25 @@ export class FacturXClient {
    */
   async createFacturX(invoice: InvoiceDocument, options?: FacturXOptions): Promise<Uint8Array> {
     return bytes(await this.http.postJson("/v1/create/facturx", invoice, options));
+  }
+
+  /**
+   * Creates a plain UN/CEFACT CII XML invoice with the EN 16931 guideline ID, ready
+   * to pass to `embedFacturX` together with your own PDF. Throws an `InvoiceXmlError`
+   * with the violated rules in `errors` when the invoice would not be compliant.
+   */
+  async createCii(invoice: InvoiceDocument, options?: CiiOptions): Promise<string> {
+    return (await this.http.postJson("/v1/create/cii", invoice, options)).text();
+  }
+
+  /**
+   * Creates a UBL XML invoice. `profile` picks the CustomizationID and the rule set
+   * the invoice is validated against; "peppol-bis-3" is the default. Throws an
+   * `InvoiceXmlError` with the violated rules in `errors` when the invoice would not
+   * be compliant.
+   */
+  async createUbl(invoice: InvoiceDocument, options?: UblOptions): Promise<string> {
+    return (await this.http.postJson("/v1/create/ubl", invoice, options)).text();
   }
 
   /**

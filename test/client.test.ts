@@ -142,6 +142,109 @@ describe("createFacturX", () => {
   });
 });
 
+describe("createCii", () => {
+  it("posts the invoice envelope with language and rules and returns the CII XML as text", async () => {
+    const { fetch, calls } = mockFetch(new Response(XML, { headers: { "Content-Type": "application/xml" } }));
+    const xml = await client(fetch).createCii(invoice, { language: "FR", rules: ["br-fr"] });
+
+    expect(xml).toBe(XML);
+    const call = calls[0]!;
+    expect(call.url).toBe("https://api.invoicexml.com/v1/create/cii");
+    expect(call.init.method).toBe("POST");
+    expect(headers(call).Authorization).toBe("Bearer test-key");
+    expect(headers(call)["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(call.init.body as string)).toEqual({ invoice, options: { language: "FR", rules: ["br-fr"] } });
+  });
+
+  it("omits options when none are given", async () => {
+    const { fetch, calls } = mockFetch(new Response(XML));
+    await client(fetch).createCii(invoice);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ invoice });
+  });
+
+  it("feeds the created XML straight into embedFacturX", async () => {
+    const { fetch, calls } = mockFetch(new Response(XML), new Response(PDF));
+    const sdk = client(fetch);
+    const pdf = await sdk.embedFacturX(PDF, await sdk.createCii(invoice));
+
+    expect(Array.from(pdf)).toEqual(Array.from(PDF));
+    expect(calls[1]!.url).toBe("https://api.invoicexml.com/v1/embed/facturx");
+    const xml = form(calls[1]!).get("xml") as File;
+    expect(xml.type).toBe("application/xml");
+    expect(await xml.text()).toBe(XML);
+  });
+
+  it("leaves a missing invoice to the API, which refuses it with an InvoiceXmlError like the other create methods", async () => {
+    const problem = { title: "Invalid request", status: 400, errorCode: 4002, errors: [{ rule: "REQUEST", message: "invoice is required." }], warnings: [] };
+    const { fetch, calls } = mockFetch(jsonResponse(problem, 400));
+    const error = await client(fetch).createCii(null as unknown as InvoiceDocument).catch((e: unknown) => e);
+
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ invoice: null });
+    expect(error).toBeInstanceOf(InvoiceXmlError);
+    expect((error as InvoiceXmlError).status).toBe(400);
+    expect((error as InvoiceXmlError).errorCode).toBe(4002);
+  });
+
+  it("throws an InvoiceXmlError carrying the violated rules on 400", async () => {
+    const problem = {
+      title: "Invoice validation failed",
+      status: 400,
+      errorCode: 4001,
+      errors: [{ rule: "BR-FR-05", layer: "cius", message: "Mention PMT manquante.", fields: ["notes"] }],
+      warnings: [],
+    };
+    const { fetch } = mockFetch(jsonResponse(problem, 400));
+    const error = await client(fetch).createCii(invoice, { rules: ["br-fr"] }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(InvoiceXmlError);
+    expect((error as InvoiceXmlError).errorCode).toBe(4001);
+    expect((error as InvoiceXmlError).errors[0]!.rule).toBe("BR-FR-05");
+  });
+});
+
+describe("createUbl", () => {
+  const UBL = '<?xml version="1.0"?><Invoice/>';
+
+  it("posts the invoice envelope with profile, language and rules and returns the UBL XML as text", async () => {
+    const { fetch, calls } = mockFetch(new Response(UBL, { headers: { "Content-Type": "application/xml" } }));
+    const xml = await client(fetch).createUbl(invoice, { profile: "en16931", language: "FR", rules: ["br-fr"] });
+
+    expect(xml).toBe(UBL);
+    const call = calls[0]!;
+    expect(call.url).toBe("https://api.invoicexml.com/v1/create/ubl");
+    expect(call.init.method).toBe("POST");
+    expect(headers(call).Authorization).toBe("Bearer test-key");
+    expect(headers(call)["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(call.init.body as string)).toEqual({
+      invoice,
+      options: { profile: "en16931", language: "FR", rules: ["br-fr"] },
+    });
+  });
+
+  it("omits options when none are given, so the API default profile applies", async () => {
+    const { fetch, calls } = mockFetch(new Response(UBL));
+    await client(fetch).createUbl(invoice);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ invoice });
+  });
+
+  it("throws an InvoiceXmlError carrying the violated rules on 400", async () => {
+    const problem = {
+      title: "Invoice validation failed",
+      status: 400,
+      errorCode: 4001,
+      errors: [{ rule: "PEPPOL-EN16931-R010", layer: "cius", message: "Buyer electronic address is missing.", fields: ["buyer.electronicAddress"] }],
+      warnings: [],
+    };
+    const { fetch } = mockFetch(jsonResponse(problem, 400));
+    const error = await client(fetch).createUbl(invoice, { profile: "peppol-bis-3" }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(InvoiceXmlError);
+    expect((error as InvoiceXmlError).status).toBe(400);
+    expect((error as InvoiceXmlError).errorCode).toBe(4001);
+    expect((error as InvoiceXmlError).errors[0]!.rule).toBe("PEPPOL-EN16931-R010");
+  });
+});
+
 describe("uploads", () => {
   it("validates a Factur-X PDF as a multipart file labelled application/pdf", async () => {
     const { fetch, calls } = mockFetch(jsonResponse(verdict));

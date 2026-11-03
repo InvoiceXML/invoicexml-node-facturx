@@ -31,6 +31,30 @@ export interface FacturXOptions {
   rules?: RuleSet[];
 }
 
+/** Options for `createCii`. All optional. */
+export interface CiiOptions {
+  /** Language of the default texts the API fills in when you leave them empty: "EN" (default), "DE" or "FR". */
+  language?: Options["language"];
+  /** Extra rule sets the created invoice must also pass, for example ["br-fr"]. */
+  rules?: RuleSet[];
+}
+
+/**
+ * UBL profile of `createUbl`, sent as given. It picks the CustomizationID stamped
+ * into the XML and the rule set the invoice is validated against.
+ */
+export type UblProfile = "en16931" | "peppol-bis-3" | "nlcius" | "ehf" | "xrechnung" | "pint";
+
+/** Options for `createUbl`. All optional. */
+export interface UblOptions {
+  /** UBL profile: "peppol-bis-3" (default), "en16931", "nlcius", "ehf", "xrechnung" or "pint". */
+  profile?: UblProfile;
+  /** Language of the default texts the API fills in when you leave them empty: "EN" (default), "DE" or "FR". */
+  language?: Options["language"];
+  /** Extra rule sets the created invoice must also pass, for example ["br-fr"]. */
+  rules?: RuleSet[];
+}
+
 /** Options for `validateFacturX`. */
 export interface ValidateOptions {
   /** Extra rule sets to check on top of the declared profile, for example ["br-fr"]. */

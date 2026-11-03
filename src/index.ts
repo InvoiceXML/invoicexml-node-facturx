@@ -3,6 +3,7 @@ export type { ClientOptions } from "./http.js";
 export { InvoiceXmlError, TooManyRequestsError } from "./errors.js";
 export { FacturXProfiles, type FacturXProfile } from "./profiles.js";
 export type {
+  CiiOptions,
   ConvertOptions,
   ConvertToPdfOptions,
   EmailMessage,
@@ -20,6 +21,8 @@ export type {
   ReportRow,
   RuleSet,
   TransformOptions,
+  UblOptions,
+  UblProfile,
   ValidateOptions,
   ValidationReport,
   ValidationReportOptions,

@@ -45,6 +45,8 @@ You send net prices, quantities and VAT rates. The API computes the totals and t
 | Method | Endpoint | Returns |
 | --- | --- | --- |
 | `createFacturX(invoice, options?)` | `POST /v1/create/facturx` | Factur-X PDF/A-3 as `Uint8Array` |
+| `createCii(invoice, { language?, rules? })` | [`POST /v1/create/cii`](https://www.invoicexml.com/docs/api/create/cii) | CII XML as `string`, ready for `embedFacturX` |
+| `createUbl(invoice, { profile?, language?, rules? })` | [`POST /v1/create/ubl`](https://www.invoicexml.com/docs/api/create/ubl) | UBL XML as `string` |
 | `validateFacturX(pdf, { rules? })` | `POST /v1/validate/facturx` | `ValidationResult` |
 | `validateFacturXReport(pdf, { rules?, validationLanguage? })` | `POST /v1/validate/facturx/report` | `ValidationReport`: the PDF report in `file`, the verdict in `valid` |
 | `embedFacturX(pdf, xml, { skipValidation?, rules? })` | `POST /v1/embed/facturx` | Factur-X PDF/A-3 as `Uint8Array` |
@@ -67,6 +69,23 @@ The `InvoiceDocument` type is generated from the [OpenAPI schema](https://api.in
 ### Create options
 
 `createFacturX` accepts `language` (`"EN"`, `"DE"` or `"FR"`), `brandColor` (`"#RRGGBB"`), `logoUrl`, `pdfUrl` (your own PDF as the visual layer), `includeAdvancedProperties` and `rules`.
+
+### Your own PDF layout
+
+To keep the PDF your own system already produces, create the CII XML from the invoice and embed it into that PDF. `createCii` accepts `language` and `rules`, and its XML goes straight into `embedFacturX`. See the [reference](https://www.invoicexml.com/docs/api/create/cii).
+
+```ts
+const xml = await client.createCii(invoice, { language: "FR" });
+await writeFile("facture.pdf", await client.embedFacturX(await readFile("ma-facture.pdf"), xml));
+```
+
+### Create a UBL invoice
+
+`createUbl` builds a UBL XML from the same invoice object, with `profile` choosing the rule set (`"peppol-bis-3"` by default, also `"en16931"`, `"nlcius"`, `"ehf"`, `"xrechnung"` and `"pint"`). See the [reference](https://www.invoicexml.com/docs/api/create/ubl).
+
+```ts
+const ubl = await client.createUbl(invoice, { profile: "peppol-bis-3" });
+```
 
 ### The French e-invoicing mandate
 

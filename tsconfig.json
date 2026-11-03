@@ -11,7 +11,10 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@invoicexml/facturx": ["./src/index.ts"]
+    }
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "examples"]
 }

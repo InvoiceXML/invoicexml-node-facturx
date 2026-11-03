@@ -6,7 +6,7 @@ export interface ClientOptions {
   apiKey: string;
   /** Defaults to https://api.invoicexml.com. */
   baseUrl?: string;
-  /** How often a 429 is retried after waiting Retry-After seconds, on every call except transform. Defaults to 3. 0 disables retries. */
+  /** How often a 429 is retried after waiting Retry-After seconds, on every call except transform and parse. Defaults to 3. 0 disables retries. */
   maxRetries?: number;
   /** Request timeout in milliseconds. Defaults to 120000. */
   timeoutMs?: number;

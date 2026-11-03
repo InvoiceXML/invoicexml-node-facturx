@@ -43,7 +43,8 @@ export class InvoiceXmlError extends Error {
 
 /**
  * Thrown on HTTP 429 once the automatic retries are used up, or on the first 429
- * of a transform call, which is not retried. A 429 is not billed.
+ * of a transform or parse call, which are not retried because a retry repeats the
+ * AI read. A 429 is not billed.
  */
 export class TooManyRequestsError extends InvoiceXmlError {
   /** Seconds to wait before retrying, from the Retry-After header. */

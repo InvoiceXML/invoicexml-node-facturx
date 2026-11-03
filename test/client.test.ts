@@ -299,13 +299,66 @@ describe("uploads", () => {
   });
 });
 
+describe("parseJson", () => {
+  const confidence = {
+    overall: 0.9,
+    areas: { sellerIdentification: 1, buyerIdentification: 0.95, taxCalculation: 0.9, lineItems: null },
+  };
+
+  it("posts the PDF as the file part to /v1/parse/json and maps invoice, confidence and language", async () => {
+    const { fetch, calls } = mockFetch(jsonResponse({ invoice, confidence, language: "fr" }));
+    const parsed = await client(fetch).parseJson(PDF);
+
+    expect(parsed.invoice.invoiceNumber).toBe("FA-2026-0042");
+    expect(parsed.confidence).toEqual(confidence);
+    expect(parsed.confidence!.areas.lineItems).toBeNull();
+    expect(parsed.language).toBe("fr");
+    const call = calls[0]!;
+    expect(call.url).toBe("https://api.invoicexml.com/v1/parse/json");
+    expect(headers(call).Authorization).toBe("Bearer test-key");
+    expect(headers(call)["Content-Type"]).toBeUndefined();
+    expect(fieldNames(call)).toEqual(["file"]);
+    const file = form(call).get("file") as File;
+    expect(file.type).toBe("application/pdf");
+    expect(file.name).toBe("document.pdf");
+  });
+
+  it("returns a response without confidence and language as is", async () => {
+    const { fetch } = mockFetch(jsonResponse({ invoice }));
+    const parsed = await client(fetch).parseJson(new Blob([PDF]));
+
+    expect(parsed.invoice).toEqual(invoice);
+    expect(parsed.confidence).toBeUndefined();
+    expect(parsed.language).toBeUndefined();
+  });
+
+  it("makes one request on a 429 and throws TooManyRequestsError", async () => {
+    const { fetch, calls } = mockFetch(jsonResponse({ title: "Too Many Requests" }, 429, { "Retry-After": "3" }));
+    const error = await client(fetch).parseJson(PDF).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(TooManyRequestsError);
+    expect((error as TooManyRequestsError).retryAfter).toBe(3);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("surfaces a refused document through InvoiceXmlError", async () => {
+    const problem = { title: "Too many pages", status: 413, errorCode: 4005, errors: [], warnings: [] };
+    const { fetch } = mockFetch(jsonResponse(problem, 413));
+    const error = await client(fetch).parseJson(PDF).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(InvoiceXmlError);
+    expect((error as InvoiceXmlError).status).toBe(413);
+    expect((error as InvoiceXmlError).errorCode).toBe(4005);
+  });
+});
+
 describe("render", () => {
-  it("sends every option to /v1/render/cii/to/pdf", async () => {
+  it("sends every option to /v1/render/xml/to/pdf", async () => {
     const { fetch, calls } = mockFetch(new Response(PDF));
-    const pdf = await client(fetch).renderCiiToPdf(XML, { language: "FR", logoUrl: "https://example.com/logo.png", includeQrCode: true });
+    const pdf = await client(fetch).renderXmlToPdf(XML, { language: "FR", logoUrl: "https://example.com/logo.png", includeQrCode: true });
 
     expect(Array.from(pdf)).toEqual(Array.from(PDF));
-    expect(calls[0]!.url).toBe("https://api.invoicexml.com/v1/render/cii/to/pdf");
+    expect(calls[0]!.url).toBe("https://api.invoicexml.com/v1/render/xml/to/pdf");
     const body = form(calls[0]!);
     expect((body.get("file") as File).type).toBe("application/xml");
     expect(body.get("language")).toBe("FR");
@@ -315,8 +368,8 @@ describe("render", () => {
 
   it("omits unset options and sends an explicit includeQrCode false", async () => {
     const { fetch, calls } = mockFetch(new Response(PDF), new Response(PDF));
-    await client(fetch).renderCiiToPdf(XML);
-    await client(fetch).renderCiiToPdf(XML, { includeQrCode: false });
+    await client(fetch).renderXmlToPdf(XML);
+    await client(fetch).renderXmlToPdf(XML, { includeQrCode: false });
 
     expect(fieldNames(calls[0]!)).toEqual(["file"]);
     expect(form(calls[1]!).get("includeQrCode")).toBe("false");
@@ -641,13 +694,13 @@ describe("rate limiting", () => {
     const { fetch, calls } = mockFetch(limited(), new Response(PDF), limited(), new Response(XML), limited(), new Response(PDF));
     const sdk = client(fetch);
 
-    await sdk.renderCiiToPdf(XML);
+    await sdk.renderXmlToPdf(XML);
     await sdk.convertFacturXToUbl(PDF);
     await sdk.validateFacturXReport(PDF);
 
     expect(calls.map((call) => new URL(call.url).pathname)).toEqual([
-      "/v1/render/cii/to/pdf",
-      "/v1/render/cii/to/pdf",
+      "/v1/render/xml/to/pdf",
+      "/v1/render/xml/to/pdf",
       "/v1/convert/facturx/to/ubl",
       "/v1/convert/facturx/to/ubl",
       "/v1/validate/facturx/report",

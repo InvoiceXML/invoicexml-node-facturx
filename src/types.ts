@@ -69,7 +69,7 @@ export interface EmbedOptions {
   rules?: RuleSet[];
 }
 
-/** Options for `renderCiiToPdf`. */
+/** Options for `renderXmlToPdf`. */
 export interface RenderOptions {
   /** Language of the labels: "EN" (default), "DE" or "FR". */
   language?: Language;
@@ -160,6 +160,38 @@ export interface EmailSendResult {
 /** Response of `extractJson`. `invoice` can be passed straight back to `createFacturX`. */
 export interface ExtractJsonResult {
   invoice: InvoiceDocument;
+}
+
+/**
+ * How sure the AI read is, per area, from 0.0 (had to guess) to 1.0 (unambiguous).
+ * A score is null when the area was not reported.
+ */
+export interface ParseConfidenceAreas {
+  sellerIdentification: number | null;
+  buyerIdentification: number | null;
+  taxCalculation: number | null;
+  /** Capped when the lines do not add up to the printed totals. */
+  lineItems: number | null;
+}
+
+/** Confidence of a `parseJson` read. */
+export interface ParseConfidence {
+  /** Mean of the reported areas, from 0.0 to 1.0, or null when none was reported. */
+  overall: number | null;
+  areas: ParseConfidenceAreas;
+}
+
+/** Response of `parseJson`. A person must check `invoice` before it is used. */
+export interface ParsedInvoice {
+  invoice: InvoiceDocument;
+  /** How sure the read is. Can be absent. */
+  confidence?: ParseConfidence;
+  /**
+   * Lowercase ISO 639-1 code of the language the invoice is written in, for example "fr".
+   * Any language can come back, so it is not always a valid `Language` for the create
+   * and render methods. Absent when it could not be told.
+   */
+  language?: string;
 }
 
 /**

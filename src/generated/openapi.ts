@@ -28,7 +28,7 @@ export interface components {
             /**
              * @description Fatal findings on validation failures: EN 16931 / profile rule violations of the
              *     generated XML (4001), request model errors (4002), or a single finding naming the
-             *     fault (4006, 4015, 4017, 4018).
+             *     fault (4006, 4015, 4017, 4018, 4024).
              */
             errors?: null | components["schemas"]["ValidationFinding"][];
             instance?: null | string;
@@ -41,7 +41,7 @@ export interface components {
             type?: null | string;
             /**
              * @description Always `false` when present. Set on validation failures (error codes 4001, 4002,
-             *     4006, 4015, 4017, 4018) so the body can be handled like a validate verdict.
+             *     4006, 4015, 4017, 4018, 4024) so the body can be handled like a validate verdict.
              */
             valid?: null | boolean;
             /** @description Non-blocking findings collected during the same validation run (4001 and 4002 only). */
@@ -158,6 +158,7 @@ export interface components {
             buyer: null | components["schemas"]["BuyerParty"];
             buyerReference?: null | string;
             charges?: components["schemas"]["DocumentLevelCharge"][];
+            contractReference?: null | string;
             currency: null | components["schemas"]["CurrencyCode"];
             delivery?: null | components["schemas"]["DeliveryInformation"];
             despatchAdviceReference?: null | string;
@@ -221,12 +222,20 @@ export interface components {
         InvoiceOptions: {
             brandColor?: null | string;
             includeAdvancedProperties?: null | boolean;
+            includeQrCode?: null | boolean;
             language?: null | components["schemas"]["PdfLanguage"];
+            /** Format: byte */
+            logo?: null | string;
             logoUrl?: null | string;
             pdfUrl?: null | string;
             profile?: null | string;
             rules?: null | string[];
             syntax?: null | string;
+            /**
+             * @default en
+             * @enum {null|string}
+             */
+            validationLanguage?: "en" | "de" | "fr" | null;
         };
         InvoiceReportFinding: {
             message: string;
@@ -331,7 +340,7 @@ export interface components {
             /** Format: double */
             grossPrice?: null | number;
             /** Format: double */
-            netPrice: null | number;
+            netPrice?: null | number;
             /** Format: double */
             priceBaseQuantity?: null | number;
             priceBaseUnit?: null | string;
@@ -389,11 +398,11 @@ export interface components {
              * @description 1-based invoice line the finding refers to, or `null` for document-level findings.
              */
             line: null | number;
-            /** @description Human-readable explanation of the finding. */
+            /** @description Human-readable explanation of the finding and how to fix it, in the language the request asked for with `validationLanguage` (`en`, `de` or `fr`; English by default). The text of a rule that has no curated message stays in the rule set's own wording. */
             message: string;
-            /** @description The validator's verbatim output line for the finding. `null` when there is none. */
+            /** @description The validator's verbatim output line for the finding, whatever the `validationLanguage`. `null` when there is none. */
             raw: null | string;
-            /** @description Identifier of the rule that fired (for example `BR-CO-15`, `PDF-EMBED`). `null` for request model validation findings. */
+            /** @description Identifier of the rule that fired (for example `BR-CO-15`, `PDF-EMBED`). `null` for a request model finding that reports no rule. */
             rule: null | string;
         } & {
             [key: string]: unknown;

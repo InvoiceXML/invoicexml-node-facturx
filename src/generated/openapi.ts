@@ -244,7 +244,7 @@ export interface components {
             [key: string]: unknown;
         };
         /** @enum {string} */
-        InvoiceTypeCode: "326" | "380" | "381" | "383" | "384" | "386" | "389" | "875" | "876" | "877";
+        InvoiceTypeCode: "261" | "326" | "380" | "381" | "383" | "384" | "386" | "389" | "500" | "875" | "876" | "877";
         InvoicingPeriod: {
             /** Format: date */
             endDate?: null | string;

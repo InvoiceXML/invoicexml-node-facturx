@@ -2,7 +2,7 @@ import { InvoiceXmlError, TooManyRequestsError } from "./errors.js";
 import type { FileInput, ProblemDetails } from "./types.js";
 
 export interface ClientOptions {
-  /** API key from https://www.invoicexml.com/account/authentication. */
+  /** API key. The page at https://www.invoicexml.com/account/authentication shows it. */
   apiKey: string;
   /** Defaults to https://api.invoicexml.com. */
   baseUrl?: string;
